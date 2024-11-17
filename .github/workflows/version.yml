@@ -8,6 +8,12 @@ on:
       - 'package.json'
       - 'src-tauri/Cargo.toml'
 
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
 jobs:
   version:
     name: Update Version
@@ -55,6 +61,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.changelog.outputs.skipped == 'false'
+        id: create-pr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PAT_TOKEN }}
@@ -68,3 +75,10 @@ jobs:
           branch: "release/v${{ steps.changelog.outputs.version }}"
           base: main
           delete-branch: true
+
+      - name: Enable Auto-merge
+        if: steps.changelog.outputs.skipped == 'false' && steps.create-pr.outputs.pull-request-number != ''
+        run: |
+          gh pr merge --auto --merge --delete-branch "${{ steps.create-pr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
