@@ -20,6 +20,22 @@
 
 Your site is instantly available at `http://localhost:8000` (or another port if 8000 is busy)
 
+## Example Projects
+
+Check out our example projects in the `examples/` directory:
+
+### Basic Website (`examples/basic-website`)
+A simple website demonstrating:
+- Live reload functionality
+- Basic HTML/CSS structure
+- Time display using JavaScript
+- Feature testing components
+
+Try it out:
+1. Download ServeLite
+2. Open the `examples/basic-website` folder
+3. Watch changes appear instantly as you edit!
+
 ## Perfect For...
 
 - 🎓 Learning HTML, CSS, and JavaScript
@@ -71,6 +87,18 @@ Choose either:
    - Copy the URL (it shows your computer's network address)
    - Open it on your phone (while on the same WiFi)
    - Perfect for responsive design testing!
+
+## Project Structure
+
+```
+servelite/
+├── examples/              # Example projects to get started
+│   └── basic-website/    # Simple website with live reload demo
+├── src-tauri/            # Desktop app backend (Rust)
+├── ui/                   # Core app interface
+├── package.json          # Node.js dependencies
+└── README.md            # You are here!
+```
 
 ## Common Questions
 
