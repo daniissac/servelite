@@ -21,6 +21,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -74,6 +75,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -121,16 +123,26 @@ jobs:
         platform: [macos-latest, ubuntu-latest, windows-latest]
     name: Verify Build (${{ matrix.platform }})
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        id: download
+        uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: artifacts
 
+      - name: Check download status
+        if: steps.download.outcome != 'success'
+        run: |
+          echo "Failed to download artifacts"
+          exit 1
+
       - name: Verify macOS build
-        if: matrix.platform == 'macos-latest'
+        if: matrix.platform == 'macos-latest' && steps.download.outcome == 'success'
+        timeout-minutes: 5
         run: |
           chmod +x ./artifacts/bundle/dmg/ServeLite*.dmg
           hdiutil attach ./artifacts/bundle/dmg/ServeLite*.dmg
@@ -139,13 +151,15 @@ jobs:
           hdiutil detach "/Volumes/ServeLite"
 
       - name: Verify Linux build
-        if: matrix.platform == 'ubuntu-latest'
+        if: matrix.platform == 'ubuntu-latest' && steps.download.outcome == 'success'
+        timeout-minutes: 5
         run: |
           chmod +x ./artifacts/bundle/appimage/ServeLite*.AppImage
           ./artifacts/bundle/appimage/ServeLite*.AppImage --version
 
       - name: Verify Windows build
-        if: matrix.platform == 'windows-latest'
+        if: matrix.platform == 'windows-latest' && steps.download.outcome == 'success'
+        timeout-minutes: 5
         run: |
           $msiFile = Get-ChildItem ./artifacts/bundle/msi/ServeLite*.msi
           Start-Process msiexec.exe -ArgumentList "/i `"$msiFile`" /qn" -Wait

@@ -11,22 +11,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        platform: [macos-latest, ubuntu-latest, windows-latest]
 
     runs-on: ${{ matrix.platform }}
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 20
+          cache: 'npm'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-20.04'
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
@@ -34,7 +43,26 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Run clippy
+        id: clippy
+        continue-on-error: true
+        run: cd src-tauri && cargo clippy -- -D warnings
+
+      - name: Check clippy status
+        if: steps.clippy.outcome != 'success'
+        run: |
+          echo "Clippy checks failed"
+          exit 1
+
       - name: Rust tests
+        id: tests
+        continue-on-error: true
         run: |
           cd src-tauri
           cargo test
+
+      - name: Check test status
+        if: steps.tests.outcome != 'success'
+        run: |
+          echo "Rust tests failed"
+          exit 1
