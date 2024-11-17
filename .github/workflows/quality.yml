@@ -25,10 +25,16 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
       - name: Run cargo-audit
-        uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd src-tauri
+          cargo audit
 
   coverage:
     name: Code Coverage
@@ -59,19 +65,19 @@ jobs:
         run: |
           cd src-tauri
           cargo test
-          grcov . --binary-path ./target/debug/deps/ -s . -t html,markdown --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o coverage/
+          grcov . --binary-path ./target/debug/deps/ -s . -t html,markdown --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o ../coverage/
 
       - name: Upload HTML coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report-html
-          path: src-tauri/coverage/html
+          path: coverage/html
 
       - name: Add coverage report to PR
         if: github.event_name == 'pull_request'
         run: |
           echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          cat src-tauri/coverage/coverage.md >> $GITHUB_STEP_SUMMARY
+          cat coverage/coverage.md >> $GITHUB_STEP_SUMMARY
 
   dependencies:
     name: Dependency Check
@@ -90,7 +96,7 @@ jobs:
             --enableRetired
 
       - name: Upload dependency check report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
           path: reports
