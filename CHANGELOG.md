@@ -1,3 +1,21 @@
+# [1.1.0](https://github.com/daniissac/servelite/compare/v1.0.5...v1.1.0) (2024-11-17)
+
+
+### Features
+
+* add auto-merge for version PRs ([30d321d](https://github.com/daniissac/servelite/commit/30d321d42d8c126ccda9cda18660cc1dec5ba46a))
+
+
+
+## [1.0.5](https://github.com/daniissac/servelite/compare/v1.0.4...v1.0.5) (2024-11-17)
+
+
+### Bug Fixes
+
+* improve GitHub Actions workflows ([eafcf91](https://github.com/daniissac/servelite/commit/eafcf916638da8de8659d5e6d4180c06e319e54e))
+
+
+
 ## [1.0.4](https://github.com/daniissac/servelite/compare/v1.0.3...v1.0.4) (2024-11-17)
 
 
@@ -25,24 +43,6 @@
 * simplify workflow and use GITHUB_TOKEN ([4f763a3](https://github.com/daniissac/servelite/commit/4f763a3f34adff5ff25c619c4b0fba44cd2108d8))
 * update checkout action configuration ([27fa761](https://github.com/daniissac/servelite/commit/27fa76178dbd4fe4381450ef99d36744d5929965))
 * update version workflow to use GH_TOKEN ([83276ec](https://github.com/daniissac/servelite/commit/83276ecb5636ac42f33ec71c48d5c77773c67b2f))
-
-
-
-## [1.0.1](https://github.com/daniissac/servelite/compare/v1.0.0...v1.0.1) (2024-11-17)
-
-
-### Bug Fixes
-
-* update quality workflow ([c2ad11a](https://github.com/daniissac/servelite/commit/c2ad11a78549312846ad1ed13b0fac7fd9f5f600))
-
-
-
-# [1.0.0](https://github.com/daniissac/servelite/compare/06f404b7e1538e46f2d82251b8638d52c2074417...v1.0.0) (2024-11-17)
-
-
-### Bug Fixes
-
-* add write permissions to release workflow ([06f404b](https://github.com/daniissac/servelite/commit/06f404b7e1538e46f2d82251b8638d52c2074417))
 
 
 
