@@ -70,7 +70,7 @@ jobs:
         id: create-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: ServeLite ${{ env.VERSION }}
           body_path: release_notes.md
