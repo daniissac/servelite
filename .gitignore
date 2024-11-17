@@ -10,6 +10,7 @@ npm-debug.log*
 .DS_Store
 .AppleDouble
 .LSOverride
+**/.DS_Store
 
 # Windows
 Thumbs.db
@@ -19,10 +20,24 @@ Desktop.ini
 # Build outputs
 dist/
 dist-ssr/
-*.local
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test directories
+/test-serve/
+/coverage/
