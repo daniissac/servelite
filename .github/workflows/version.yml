@@ -1,0 +1,63 @@
+name: Version Management
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'package.json'
+      - 'src-tauri/Cargo.toml'
+
+jobs:
+  version:
+    name: Update Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          git-message: 'chore(release): {version}'
+          preset: 'angular'
+          tag-prefix: 'v'
+          output-file: 'CHANGELOG.md'
+          skip-version-file: true
+          skip-commit: true
+
+      - name: Update version in package.json
+        if: steps.changelog.outputs.skipped == 'false'
+        run: |
+          NEW_VERSION=${{ steps.changelog.outputs.version }}
+          jq ".version = \"$NEW_VERSION\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Update version in Cargo.toml
+        if: steps.changelog.outputs.skipped == 'false'
+        run: |
+          NEW_VERSION=${{ steps.changelog.outputs.version }}
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" src-tauri/Cargo.toml
+
+      - name: Create Pull Request
+        if: steps.changelog.outputs.skipped == 'false'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(release): prepare release v${{ steps.changelog.outputs.version }}"
+          title: "chore(release): prepare release v${{ steps.changelog.outputs.version }}"
+          body: |
+            This PR updates the version and changelog for release v${{ steps.changelog.outputs.version }}.
+
+            Changes:
+            ${{ steps.changelog.outputs.clean_changelog }}
+          branch: release/v${{ steps.changelog.outputs.version }}
+          base: main
+          labels: release
+          draft: false

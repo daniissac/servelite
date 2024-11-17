@@ -1,0 +1,96 @@
+name: Code Quality & Security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly
+
+jobs:
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run cargo-audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install grcov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: grcov
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Generate coverage report
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Cinstrument-coverage'
+          LLVM_PROFILE_FILE: 'coverage-%p-%m.profraw'
+        run: |
+          cd src-tauri
+          cargo test
+          grcov . --binary-path ./target/debug/deps/ -s . -t html,markdown --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o coverage/
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report-html
+          path: src-tauri/coverage/html
+
+      - name: Add coverage report to PR
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          cat src-tauri/coverage/coverage.md >> $GITHUB_STEP_SUMMARY
+
+  dependencies:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'ServeLite'
+          path: '.'
+          format: 'HTML'
+          args: >
+            --failOnCVSS 7
+            --enableRetired
+
+      - name: Upload dependency check report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-check-report
+          path: reports

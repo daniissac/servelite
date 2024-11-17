@@ -1,142 +1,154 @@
-name: Release
+name: Release ServeLite
 
 on:
   push:
     tags:
       - 'v*'
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create-release.outputs.id }}
-      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
-      - name: Generate Release Notes
-        id: release_notes
-        run: |
-          cat > release_notes.md << 'EOL'
-          ServeLite ${{ env.VERSION }}
-          
-          A minimalist system tray application for easily sharing local directories across different operating systems.
-          
-          Features
-          --------
-          • One-click directory sharing via system tray
-          • Cross-platform support (Windows, macOS, Linux)
-          • Zero configuration required
-          • Native system integration
-          • Local network file serving
-          
-          Components
-          ----------
-          • System tray integration
-          • Start/Stop server functionality
-          • Directory selection dialog
-          • Cross-platform builds
-          • Automated release process
-          
-          Installation
-          ------------
-          Download the appropriate installer for your platform:
-          
-          • Windows: ServeLite_${{ env.VERSION }}_x64.msi or ServeLite_${{ env.VERSION }}_x64-setup.exe
-          • macOS: ServeLite_${{ env.VERSION }}_x64.dmg
-          • Linux: servelite_${{ env.VERSION }}_amd64.deb or servelite_${{ env.VERSION }}_amd64.AppImage
-          
-          Usage
-          -----
-          1. Launch ServeLite - it will appear in your system tray
-          2. Click the tray icon to show the menu
-          3. Select "Start Server" and choose a directory to serve
-          4. Access your files at http://localhost:8000
-          5. Use "Stop Server" to stop serving files
-          6. Use "Quit" to exit the application
-          EOL
-
-      - name: Create Release
-        id: create-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ServeLite ${{ env.VERSION }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  build-tauri:
-    needs: create-release
+  test:
+    name: Test
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
-
+        platform: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Rust stable
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
-      - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-20.04'
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install ImageMagick (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          choco install imagemagick.app
-
-      - name: Generate Windows icons
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          Set-Location src-tauri/icons
-          Write-Host "Current directory: $(Get-Location)"
-          Write-Host "Contents before conversion:"
-          Get-ChildItem -Force
-          magick 128x128.png -define icon:auto-resize=16,24,32,48,64,96,128 icon.ico
-          if (-not (Test-Path icon.ico)) {
-            Write-Error "Failed to generate icon.ico"
-            exit 1
-          }
-          Write-Host "Contents after conversion:"
-          Get-ChildItem -Force
-          Write-Host "Icon file details:"
-          Get-Item icon.ico | Select-Object Name, Length, CreationTime, LastWriteTime
-
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: npm install
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Run clippy
+        run: cd src-tauri && cargo clippy -- -D warnings
+
+      - name: Run tests
+        run: cd src-tauri && cargo test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - platform: macos-latest
+            artifact_name: ServeLite.app
+            asset_name: ServeLite-macos.dmg
+          - platform: ubuntu-latest
+            artifact_name: servelite
+            asset_name: ServeLite-linux.AppImage
+          - platform: windows-latest
+            artifact_name: ServeLite.exe
+            asset_name: ServeLite-windows.msi
+
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          tagName: ${{ github.ref_name }}
-          releaseName: 'ServeLite ${{ github.ref_name }}'
-          releaseBody: ''
-          releaseDraft: false
+          tagName: v__VERSION__
+          releaseName: "ServeLite v__VERSION__"
+          releaseBody: |
+            See the assets to download this version and install.
+            
+            Changes in this Release:
+            - Auto port selection (8000-8099)
+            - Live reload support
+            - Recent directories menu
+            - Copy URL feature
+            - Improved error handling
+          releaseDraft: true
           prerelease: false
+
+  verify:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    name: Verify Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Verify macOS build
+        if: matrix.platform == 'macos-latest'
+        run: |
+          chmod +x ./artifacts/bundle/dmg/ServeLite*.dmg
+          hdiutil attach ./artifacts/bundle/dmg/ServeLite*.dmg
+          test -d "/Volumes/ServeLite/ServeLite.app"
+          "/Volumes/ServeLite/ServeLite.app/Contents/MacOS/servelite" --version
+          hdiutil detach "/Volumes/ServeLite"
+
+      - name: Verify Linux build
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          chmod +x ./artifacts/bundle/appimage/ServeLite*.AppImage
+          ./artifacts/bundle/appimage/ServeLite*.AppImage --version
+
+      - name: Verify Windows build
+        if: matrix.platform == 'windows-latest'
+        run: |
+          $msiFile = Get-ChildItem ./artifacts/bundle/msi/ServeLite*.msi
+          Start-Process msiexec.exe -ArgumentList "/i `"$msiFile`" /qn" -Wait
+          $serveLiteExe = "C:\Program Files\ServeLite\ServeLite.exe"
+          & $serveLiteExe --version
+          Start-Process msiexec.exe -ArgumentList "/x `"$msiFile`" /qn" -Wait

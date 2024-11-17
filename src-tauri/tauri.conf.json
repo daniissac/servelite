@@ -2,20 +2,14 @@
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devPath": "../ui",
-    "distDir": "../ui"
+    "devPath": "../src",
+    "distDir": "../src"
   },
   "package": {
     "productName": "ServeLite",
     "version": "1.0.0"
   },
   "tauri": {
-    "systemTray": {
-      "iconPath": "icons/tray-icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": true,
-      "title": "ServeLite"
-    },
     "allowlist": {
       "all": false,
       "shell": {
@@ -28,28 +22,61 @@
       "notification": {
         "all": true
       },
+      "path": {
+        "all": true
+      },
       "fs": {
         "all": true,
         "scope": ["**"]
       },
-      "path": {
-        "all": true
+      "clipboard": {
+        "writeText": true
       }
     },
     "bundle": {
       "active": true,
-      "targets": "all",
-      "identifier": "com.servelite.dev",
+      "targets": ["deb", "appimage", "dmg", "msi", "updater"],
+      "identifier": "com.codeium.servelite",
+      "publisher": "Codeium",
+      "copyright": " 2024 Codeium",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
         "icons/128x128@2x.png",
         "icons/icon.icns",
         "icons/icon.ico"
-      ]
+      ],
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": "",
+        "wix": {
+          "language": "en-US",
+          "template": "main.wxs"
+        }
+      },
+      "macOS": {
+        "frameworks": [],
+        "minimumSystemVersion": "10.13",
+        "exceptionDomain": "",
+        "signingIdentity": null,
+        "entitlements": null
+      }
     },
     "security": {
       "csp": null
+    },
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/Codeium/servelite/releases/latest/download/latest.json"
+      ],
+      "dialog": true,
+      "pubkey": "YOUR_UPDATER_SIGNATURE_PUBKEY_HERE"
     },
     "windows": []
   }
