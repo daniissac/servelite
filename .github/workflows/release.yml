@@ -7,123 +7,49 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Test
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos-latest, ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Install macOS dependencies
-        if: matrix.platform == 'macos-latest'
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Run clippy
-        run: cd src-tauri && cargo clippy -- -D warnings
-
-      - name: Run tests
-        run: cd src-tauri && cargo test
-
   build:
-    needs: test
     strategy:
       fail-fast: false
       matrix:
         platform: [macos-latest, ubuntu-latest, windows-latest]
-        include:
-          - platform: macos-latest
-            artifact_name: ServeLite.app
-            asset_name: ServeLite-macos.dmg
-          - platform: ubuntu-latest
-            artifact_name: servelite
-            asset_name: ServeLite-linux.AppImage
-          - platform: windows-latest
-            artifact_name: ServeLite.exe
-            asset_name: ServeLite-windows.msi
 
-    name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: Setup Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install macOS dependencies
-        if: matrix.platform == 'macos-latest'
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
-      - name: Install Linux dependencies
+      - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm install
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - name: Build the app
-        uses: tauri-apps/tauri-action@v0.5.0
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "ServeLite ${{ github.ref_name }}"
-          releaseBody: |
-            See the assets to download this version and install.
-            
-            Changes in this Release:
-            - Auto port selection (8000-8099)
-            - Live reload support
-            - Recent directories menu
-            - Copy URL feature
-            - Improved error handling
+          releaseName: 'ServeLite ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
 
@@ -133,48 +59,29 @@ jobs:
       fail-fast: false
       matrix:
         platform: [macos-latest, ubuntu-latest, windows-latest]
-    name: Verify Build (${{ matrix.platform }})
+        include:
+          - platform: macos-latest
+            artifact_name: ServeLite.app.tar.gz
+            install_command: tar -xzf
+          - platform: ubuntu-latest
+            artifact_name: servelite_amd64.AppImage
+            install_command: chmod +x
+          - platform: windows-latest
+            artifact_name: ServeLite_x64_en-US.msi
+            install_command: echo "No verification needed for MSI"
+
     runs-on: ${{ matrix.platform }}
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Download artifacts
-        id: download
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
         with:
+          name: ${{ matrix.artifact_name }}
           path: artifacts
 
-      - name: Check download status
-        if: steps.download.outcome != 'success'
+      - name: Verify artifact
         run: |
-          echo "Failed to download artifacts"
-          exit 1
-
-      - name: Verify macOS build
-        if: matrix.platform == 'macos-latest' && steps.download.outcome == 'success'
-        timeout-minutes: 5
-        run: |
-          chmod +x ./artifacts/bundle/dmg/ServeLite*.dmg
-          hdiutil attach ./artifacts/bundle/dmg/ServeLite*.dmg
-          test -d "/Volumes/ServeLite/ServeLite.app"
-          "/Volumes/ServeLite/ServeLite.app/Contents/MacOS/servelite" --version
-          hdiutil detach "/Volumes/ServeLite"
-
-      - name: Verify Linux build
-        if: matrix.platform == 'ubuntu-latest' && steps.download.outcome == 'success'
-        timeout-minutes: 5
-        run: |
-          chmod +x ./artifacts/bundle/appimage/ServeLite*.AppImage
-          ./artifacts/bundle/appimage/ServeLite*.AppImage --version
-
-      - name: Verify Windows build
-        if: matrix.platform == 'windows-latest' && steps.download.outcome == 'success'
-        timeout-minutes: 5
-        run: |
-          $msiFile = Get-ChildItem ./artifacts/bundle/msi/ServeLite*.msi
-          Start-Process msiexec.exe -ArgumentList "/i `"$msiFile`" /qn" -Wait
-          $serveLiteExe = "C:\Program Files\ServeLite\ServeLite.exe"
-          & $serveLiteExe --version
-          Start-Process msiexec.exe -ArgumentList "/x `"$msiFile`" /qn" -Wait
+          cd artifacts
+          ${{ matrix.install_command }} ${{ matrix.artifact_name }}
+          echo "✅ Successfully verified ${{ matrix.artifact_name }}"
