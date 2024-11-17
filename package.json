@@ -1,7 +1,7 @@
 {
   "name": "servelite",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "A minimalist system tray application for easily sharing local directories",
   "repository": {
     "type": "git",
