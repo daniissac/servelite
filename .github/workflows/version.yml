@@ -20,23 +20,16 @@ jobs:
         with:
           fetch-depth: 0
           repository: daniissac/servelite
-          token: ${{ secrets.GH_TOKEN }}
-          ssh-strict: true
-          ssh-user: git
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
           clean: true
-          sparse-checkout-cone-mode: true
           fetch-tags: false
-          show-progress: true
-          lfs: false
-          submodules: false
-          set-safe-directory: true
 
       - name: Generate changelog
         id: changelog
         uses: TriPSs/conventional-changelog-action@v3
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           git-message: 'chore(release): {version}'
           preset: 'angular'
           tag-prefix: 'v'
@@ -61,7 +54,7 @@ jobs:
         if: steps.changelog.outputs.skipped == 'false'
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: update version to ${{ steps.changelog.outputs.version }}"
           title: "chore: release ${{ steps.changelog.outputs.version }}"
           body: |
