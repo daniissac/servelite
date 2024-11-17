@@ -1,0 +1,16 @@
+{
+  "name": "servelite",
+  "private": true,
+  "version": "1.0.0",
+  "description": "A minimalist system tray application for easily sharing local directories",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daniissac/servelite.git"
+  },
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.4.0"
+  }
+}
