@@ -22,6 +22,12 @@ jobs:
         with:
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Delete existing release
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh release delete ${{ github.ref_name }} --cleanup-tag --yes || true
+
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -69,7 +75,7 @@ jobs:
           DEBUG: true
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'ServeLite ${{ github.ref_name }}'
+          releaseName: 'servelite ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
