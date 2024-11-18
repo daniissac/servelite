@@ -1,18 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::VecDeque;
+use std::env;
 use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::collections::VecDeque;
-use tauri::{AppHandle, CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem, ClipboardManager};
-use tokio::sync::Mutex;
-use warp::Filter;
-use std::net::TcpListener;
-use notify::{Watcher, RecursiveMode, Event};
-use futures_util::stream::StreamExt;
+
 use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
+use notify::{Event, RecursiveMode, Watcher};
+use tauri::{AppHandle, ClipboardManager, CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem};
+use tokio::sync::{broadcast, Mutex};
+use tokio::task::JoinHandle;
+use warp::Filter;
 use warp::ws::{Message, WebSocket};
-use std::env;
 
 const MAX_RECENT_DIRS: usize = 5;
 const DEFAULT_PORT: u16 = 8000;
@@ -23,12 +25,12 @@ const APP_NAME: &str = "ServeLite";
 // Server state
 #[derive(Default)]
 pub struct ServerState {
-    server_handle: Option<tokio::task::JoinHandle<()>>,
+    server_handle: Option<JoinHandle<()>>,
     root_dir: Option<PathBuf>,
     recent_dirs: VecDeque<PathBuf>,
     current_port: u16,
     watcher: Option<notify::RecommendedWatcher>,
-    reload_tx: Option<tokio::sync::broadcast::Sender<()>>,
+    reload_tx: Option<broadcast::Sender<()>>,
 }
 
 impl ServerState {
@@ -54,7 +56,7 @@ fn find_available_port(start_port: u16) -> Option<u16> {
 
 async fn setup_live_reload(state: &mut ServerState, path: PathBuf) -> Result<(), String> {
     // Create a channel for reload notifications
-    let (tx, _) = tokio::sync::broadcast::channel(100);
+    let (tx, _) = broadcast::channel(100);
     state.reload_tx = Some(tx.clone());
 
     // Create file watcher
@@ -115,12 +117,13 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
     let routes = files.or(ws_route).with(cors);
 
     // Find available port
-    let port = find_available_port(DEFAULT_PORT).ok_or_else(|| "No available port found")?;
+    let port = find_available_port(DEFAULT_PORT)
+        .ok_or_else(|| "No available port found".to_string())?;
     state.current_port = port;
 
     // Create server
     let addr: SocketAddr = format!("127.0.0.1:{port}").parse()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e: std::net::AddrParseError| e.to_string())?;
     let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
         tokio::signal::ctrl_c().await.ok();
     });
@@ -132,31 +135,32 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
     Ok(format!("Server started at http://localhost:{port}"))
 }
 
-async fn handle_ws_client(ws: WebSocket, reload_tx: tokio::sync::broadcast::Sender<()>) {
-    let (mut tx, mut rx) = ws.split();
+async fn handle_ws_client(ws: WebSocket, reload_tx: broadcast::Sender<()>) {
+    let (mut ws_tx, mut ws_rx) = ws.split();
     let mut reload_rx = reload_tx.subscribe();
 
     let send_task = tokio::spawn(async move {
         while let Ok(()) = reload_rx.recv().await {
-            if let Err(e) = tx.send(Message::text("reload")).await {
-                tracing::error!("Failed to send reload message: {}", e);
+            if ws_tx.send(Message::text("reload")).await.is_err() {
                 break;
             }
         }
     });
 
     let recv_task = tokio::spawn(async move {
-        while let Some(result) = rx.next().await {
-            if let Err(e) = result {
-                tracing::error!("WebSocket receive error: {}", e);
+        while let Some(result) = ws_rx.next().await {
+            if result.is_err() {
                 break;
             }
         }
     });
 
+    let send_task_handle = send_task.abort_handle();
+    let recv_task_handle = recv_task.abort_handle();
+
     tokio::select! {
-        _ = send_task => recv_task.abort(),
-        _ = recv_task => send_task.abort(),
+        _ = send_task => recv_task_handle.abort(),
+        _ = recv_task => send_task_handle.abort(),
     }
 }
 
@@ -205,7 +209,7 @@ fn handle_system_tray_event(app_handle: &AppHandle, event: SystemTrayEvent, stat
         SystemTrayEvent::LeftClick { .. } | SystemTrayEvent::RightClick { .. } => {
             let tray_handle = app_handle.tray_handle();
             let has_server = {
-                let state = state.blocking_lock();
+                let state = state.try_lock().unwrap();
                 state.server_handle.is_some()
             };
             tray_handle.get_item("start").set_enabled(!has_server).unwrap();
@@ -298,35 +302,37 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
             });
         }
         id if id.starts_with("recent_") => {
-            if let Ok(idx) = id.strip_prefix("recent_").parse::<usize>() {
-                let app_handle = app_handle.clone();
-                let state = state.clone();
-                tauri::async_runtime::spawn(async move {
-                    let identifier = &app_handle.config().tauri.bundle.identifier;
-                    let path = {
-                        let state = state.lock().await;
-                        state.recent_dirs.get(idx).cloned()
-                    };
-                    if let Some(path) = path {
-                        match start_server_internal(state.clone(), path).await {
-                            Ok(msg) => {
-                                let _ = tauri::api::notification::Notification::new(identifier)
-                                    .title("Success")
-                                    .body(&msg)
-                                    .show();
-                                // Update tray menu with recent directories
-                                let state = state.lock().await;
-                                app_handle.tray_handle().set_menu(create_tray_menu(&state)).unwrap();
-                            }
-                            Err(e) => {
-                                let _ = tauri::api::notification::Notification::new(identifier)
-                                    .title("Error")
-                                    .body(e)
-                                    .show();
+            if let Some(idx_str) = id.strip_prefix("recent_") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    let app_handle = app_handle.clone();
+                    let state = state.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let identifier = &app_handle.config().tauri.bundle.identifier;
+                        let path = {
+                            let state = state.lock().await;
+                            state.recent_dirs.get(idx).cloned()
+                        };
+                        if let Some(path) = path {
+                            match start_server_internal(state.clone(), path).await {
+                                Ok(msg) => {
+                                    let _ = tauri::api::notification::Notification::new(identifier)
+                                        .title("Success")
+                                        .body(&msg)
+                                        .show();
+                                    // Update tray menu with recent directories
+                                    let state = state.lock().await;
+                                    app_handle.tray_handle().set_menu(create_tray_menu(&state)).unwrap();
+                                }
+                                Err(e) => {
+                                    let _ = tauri::api::notification::Notification::new(identifier)
+                                        .title("Error")
+                                        .body(e)
+                                        .show();
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
             }
         }
         _ => {}
@@ -334,28 +340,31 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = env::args().collect();
     if args.len() > 1 && args[1] == "--version" {
         println!("{APP_NAME} v{VERSION}");
         return;
     }
 
-    let state = Arc::new(Mutex::new(ServerState::new()));
-    let state_clone = Arc::clone(&state);
-    let state_setup = Arc::clone(&state);
-
+    let state_setup = Arc::new(Mutex::new(ServerState::new()));
+    let state_clone = Arc::clone(&state_setup);
+    
+    let tray_menu = {
+        let state = state_setup.try_lock().unwrap();
+        create_tray_menu(&state)
+    };
+    let tray = SystemTray::new().with_menu(tray_menu);
+    
     tauri::Builder::default()
         .setup(move |app| {
-            let tray_menu = create_tray_menu(&state_setup.blocking_lock());
-            let tray = SystemTray::new().with_menu(tray_menu);
             app.manage(tray);
             Ok(())
         })
         .system_tray(SystemTray::new())
         .on_system_tray_event(move |app, event| {
-            handle_system_tray_event(app, event, Arc::clone(&state_clone));
+            handle_system_tray_event(app, event, state_clone.clone())
         })
-        .manage(state)
+        .manage(state_setup)
         .run(tauri::generate_context!())
         .expect("error while running application");
 }

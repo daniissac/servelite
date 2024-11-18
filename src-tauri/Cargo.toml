@@ -12,10 +12,14 @@ tauri-build = { version = "1.4", features = [] }
 
 [dependencies]
 tauri = { version = "1.4", features = [
-    "clipboard-all", 
-    "dialog-all", 
-    "notification-all", 
-    "system-tray"
+    "clipboard-write-text",
+    "dialog-all",
+    "notification-all",
+    "system-tray",
+    "fs-all",
+    "path-all",
+    "shell-open",
+    "updater"
 ]}
 tokio = { version = "1.28.2", features = ["full"] }
 warp = "0.3.5"

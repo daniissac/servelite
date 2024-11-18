@@ -3701,7 +3701,7 @@ dependencies = [
 
 [[package]]
 name = "servelite"
-version = "1.0.0"
+version = "1.1.1"
 dependencies = [
  "futures-util",
  "notify",
@@ -3710,6 +3710,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "tracing",
  "warp",
 ]
 
