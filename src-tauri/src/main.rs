@@ -33,14 +33,7 @@ pub struct ServerState {
 
 impl ServerState {
     fn new() -> Self {
-        ServerState {
-            server_handle: None,
-            root_dir: None,
-            recent_dirs: VecDeque::with_capacity(MAX_RECENT_DIRS),
-            current_port: DEFAULT_PORT,
-            watcher: None,
-            reload_tx: None,
-        }
+        Self::default()
     }
 
     fn add_recent_dir(&mut self, path: PathBuf) {
@@ -91,7 +84,7 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
 
     // Update root directory
     if !path.exists() {
-        return Err("Directory does not exist".to_string());
+        return Err("Directory does not exist");
     }
     state.root_dir = Some(path.clone());
     state.add_recent_dir(path.clone());
@@ -101,7 +94,7 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
 
     // Create reload channel for this server instance
     let reload_tx = state.reload_tx.as_ref()
-        .ok_or_else(|| "Reload channel not initialized".to_string())?
+        .ok_or("Reload channel not initialized")?
         .clone();
 
     // Create file serving route with CORS and live reload
@@ -173,7 +166,7 @@ async fn stop_server_internal(state: Arc<Mutex<ServerState>>) -> Result<(), Stri
         handle.abort();
         Ok(())
     } else {
-        Err("Server not running".to_string())
+        Err("Server not running")
     }
 }
 
@@ -245,9 +238,10 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
                     let app_handle = app_handle.clone();
                     let state = state.clone();
                     tauri::async_runtime::spawn(async move {
+                        let identifier = &app_handle.config().tauri.bundle.identifier;
                         match start_server_internal(state.clone(), path).await {
                             Ok(msg) => {
-                                let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                let _ = tauri::api::notification::Notification::new(identifier)
                                     .title("Success")
                                     .body(&msg)
                                     .show();
@@ -256,9 +250,9 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
                                 app_handle.tray_handle().set_menu(create_tray_menu(&state)).unwrap();
                             }
                             Err(e) => {
-                                let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                let _ = tauri::api::notification::Notification::new(identifier)
                                     .title("Error")
-                                    .body(&e)
+                                    .body(e)
                                     .show();
                             }
                         }
@@ -271,17 +265,18 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
             let app_handle = app_handle.clone();
             let state = state.clone();
             tauri::async_runtime::spawn(async move {
+                let identifier = &app_handle.config().tauri.bundle.identifier;
                 match stop_server_internal(state).await {
                     Ok(_) => {
-                        let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                        let _ = tauri::api::notification::Notification::new(identifier)
                             .title("Success")
                             .body("Server stopped")
                             .show();
                     }
                     Err(e) => {
-                        let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                        let _ = tauri::api::notification::Notification::new(identifier)
                             .title("Error")
-                            .body(&e)
+                            .body(e)
                             .show();
                     }
                 }
@@ -291,13 +286,14 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
             let state = state.clone();
             tauri::async_runtime::block_on(async {
                 let state = state.lock().await;
-                if let Some(port) = state.server_handle.is_some().then(|| state.current_port) {
+                if let Some(port) = state.server_handle.is_some().then_some(state.current_port) {
                     let url = format!("http://localhost:{}", port);
-                    app_handle.clipboard_manager().write_text(url).unwrap();
-                    let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
-                        .title("Success")
-                        .body("URL copied to clipboard")
-                        .show();
+                    if let Ok(_) = app_handle.clipboard_manager().write_text(url) {
+                        let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                            .title("Success")
+                            .body("URL copied to clipboard")
+                            .show();
+                    }
                 }
             });
         }
@@ -306,6 +302,7 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
                 let app_handle = app_handle.clone();
                 let state = state.clone();
                 tauri::async_runtime::spawn(async move {
+                    let identifier = &app_handle.config().tauri.bundle.identifier;
                     let path = {
                         let state = state.lock().await;
                         state.recent_dirs.get(idx).cloned()
@@ -313,7 +310,7 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
                     if let Some(path) = path {
                         match start_server_internal(state.clone(), path).await {
                             Ok(msg) => {
-                                let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                let _ = tauri::api::notification::Notification::new(identifier)
                                     .title("Success")
                                     .body(&msg)
                                     .show();
@@ -322,9 +319,9 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
                                 app_handle.tray_handle().set_menu(create_tray_menu(&state)).unwrap();
                             }
                             Err(e) => {
-                                let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
+                                let _ = tauri::api::notification::Notification::new(identifier)
                                     .title("Error")
-                                    .body(&e)
+                                    .body(e)
                                     .show();
                             }
                         }
@@ -339,7 +336,7 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "--version" {
-        println!("{} v{}", APP_NAME, VERSION);
+        println!("{APP_NAME} v{VERSION}");
         return;
     }
 
@@ -380,7 +377,7 @@ mod tests {
         
         // Start server
         let result = start_server_internal(state.clone(), temp_dir.clone()).await;
-        assert!(result.is_ok(), "Failed to start server: {:?}", result);
+        assert!(result.is_ok(), "Failed to start server: {result:?}");
         
         // Verify server is running
         {
@@ -395,7 +392,7 @@ mod tests {
         
         // Stop server
         let result = stop_server_internal(state.clone()).await;
-        assert!(result.is_ok(), "Failed to stop server: {:?}", result);
+        assert!(result.is_ok(), "Failed to stop server: {result:?}");
         
         // Verify server is stopped
         {
@@ -412,14 +409,14 @@ mod tests {
         // Test with available port
         let port = find_available_port(DEFAULT_PORT);
         assert!(port.is_some(), "Should find an available port");
-        assert!(port.unwrap() >= DEFAULT_PORT, "Port should be >= DEFAULT_PORT");
+        assert!(port.map_or(false, |p| p >= DEFAULT_PORT), "Port should be >= DEFAULT_PORT");
         
         // Create a listener to occupy the default port
-        let _listener = TcpListener::bind(format!("127.0.0.1:{}", DEFAULT_PORT)).unwrap();
+        let _listener = TcpListener::bind(format!("127.0.0.1:{DEFAULT_PORT}")).unwrap();
         
         // Test with occupied default port
         let port = find_available_port(DEFAULT_PORT);
         assert!(port.is_some(), "Should find an alternative port");
-        assert!(port.unwrap() > DEFAULT_PORT, "Port should be > DEFAULT_PORT");
+        assert!(port.map_or(false, |p| p > DEFAULT_PORT), "Port should be > DEFAULT_PORT");
     }
 }
