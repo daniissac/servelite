@@ -44,11 +44,32 @@ jobs:
 
       - name: Install WiX (Windows only)
         if: matrix.platform == 'windows-latest'
+        shell: pwsh
         run: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-          iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-          choco install -y wixtoolset
-          echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+          $wixPath = "$env:RUNNER_TEMP\wix.zip"
+          $wixDir = "$env:RUNNER_TEMP\.wix"
+          
+          # Create WiX directory
+          New-Item -ItemType Directory -Force -Path $wixDir
+          
+          # Download and extract WiX
+          Invoke-WebRequest -Uri $wixUrl -OutFile $wixPath
+          Expand-Archive -Path $wixPath -DestinationPath $wixDir -Force
+          
+          # Add to PATH
+          echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          # Verify installation
+          Get-ChildItem $wixDir
+          $env:PATH = "$wixDir;$env:PATH"
+          candle.exe -? 2>&1 | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "WiX Toolset installed successfully"
+          } else {
+            Write-Error "WiX Toolset installation failed"
+            exit 1
+          }
 
       - name: Install frontend dependencies
         run: npm install
@@ -59,6 +80,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          WIX_PATH: ${{ runner.temp }}\.wix
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'ServeLite ${{ github.ref_name }}'
