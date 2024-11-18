@@ -52,6 +52,10 @@ Try it out:
 - **System Tray**: Always there when you need it, out of your way when you don't
 - **Live Reload**: See changes instantly without manual refresh
 
+## Development Status
+
+ServeLite is currently in active development. Version 1.0.0 represents our initial stable release.
+
 ## Installation
 
 ### Windows
