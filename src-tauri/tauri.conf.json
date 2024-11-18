@@ -35,7 +35,7 @@
     },
     "bundle": {
       "active": true,
-      "targets": ["deb", "appimage", "dmg", "msi"],
+      "targets": ["msi"],
       "identifier": "com.codeium.servelite",
       "publisher": "Codeium",
       "copyright": " 2024 Codeium",
@@ -51,16 +51,8 @@
         "digestAlgorithm": "sha256",
         "timestampUrl": "",
         "wix": {
-          "language": "en-US",
-          "template": "main.wxs"
+          "language": "en-US"
         }
-      },
-      "macOS": {
-        "frameworks": [],
-        "minimumSystemVersion": "10.13",
-        "exceptionDomain": "",
-        "signingIdentity": null,
-        "entitlements": null
       }
     },
     "security": {
