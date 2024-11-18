@@ -45,7 +45,6 @@ jobs:
 
       - name: Run clippy
         id: clippy
-        continue-on-error: true
         run: cd src-tauri && cargo clippy -- -D warnings
 
       - name: Check clippy status
@@ -56,7 +55,6 @@ jobs:
 
       - name: Rust tests
         id: tests
-        continue-on-error: true
         run: |
           cd src-tauri
           cargo test
