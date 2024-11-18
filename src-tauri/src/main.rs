@@ -64,11 +64,11 @@ async fn setup_live_reload(state: &mut ServerState, path: PathBuf) -> Result<(),
                 let _ = tx.send(());
             }
         }
-    }).map_err(|e| e.to_string())?;
+    }).map_err(|e| format!("Failed to create watcher: {}", e))?;
 
     // Watch the directory
     watcher.watch(&path, RecursiveMode::Recursive)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("Failed to watch directory: {}", e))?;
 
     state.watcher = Some(watcher);
     Ok(())
@@ -84,7 +84,7 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
 
     // Update root directory
     if !path.exists() {
-        return Err("Directory does not exist");
+        return Err("Directory does not exist".to_string());
     }
     state.root_dir = Some(path.clone());
     state.add_recent_dir(path.clone());
@@ -115,12 +115,12 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
     let routes = files.or(ws_route).with(cors);
 
     // Find available port
-    let port = find_available_port(DEFAULT_PORT).ok_or("No available port found")?;
+    let port = find_available_port(DEFAULT_PORT).ok_or_else(|| "No available port found")?;
     state.current_port = port;
 
     // Create server
-    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()
-        .map_err(|e| format!("Failed to parse address: {}", e))?;
+    let addr: SocketAddr = format!("127.0.0.1:{port}").parse()
+        .map_err(|e| e.to_string())?;
     let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
         tokio::signal::ctrl_c().await.ok();
     });
@@ -129,7 +129,7 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
     let handle = tokio::spawn(server);
     state.server_handle = Some(handle);
 
-    Ok(format!("Server started at http://localhost:{}", port))
+    Ok(format!("Server started at http://localhost:{port}"))
 }
 
 async fn handle_ws_client(ws: WebSocket, reload_tx: tokio::sync::broadcast::Sender<()>) {
@@ -166,7 +166,7 @@ async fn stop_server_internal(state: Arc<Mutex<ServerState>>) -> Result<(), Stri
         handle.abort();
         Ok(())
     } else {
-        Err("Server not running")
+        Err("Server not running".to_string())
     }
 }
 
@@ -286,9 +286,9 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
             let state = state.clone();
             tauri::async_runtime::block_on(async {
                 let state = state.lock().await;
-                if let Some(port) = state.server_handle.is_some().then_some(state.current_port) {
-                    let url = format!("http://localhost:{}", port);
-                    if let Ok(_) = app_handle.clipboard_manager().write_text(url) {
+                if let Some(port) = state.server_handle.as_ref().map(|_| state.current_port) {
+                    let url = format!("http://localhost:{port}");
+                    if app_handle.clipboard_manager().write_text(url).is_ok() {
                         let _ = tauri::api::notification::Notification::new(&app_handle.config().tauri.bundle.identifier)
                             .title("Success")
                             .body("URL copied to clipboard")
@@ -298,7 +298,7 @@ fn handle_menu_item(app_handle: &AppHandle, id: &str, state: Arc<Mutex<ServerSta
             });
         }
         id if id.starts_with("recent_") => {
-            if let Ok(idx) = id.strip_prefix("recent_").unwrap().parse::<usize>() {
+            if let Ok(idx) = id.strip_prefix("recent_").parse::<usize>() {
                 let app_handle = app_handle.clone();
                 let state = state.clone();
                 tauri::async_runtime::spawn(async move {
