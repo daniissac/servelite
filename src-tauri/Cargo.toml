@@ -1,6 +1,6 @@
 [package]
 name = "servelite"
-version = "1.0.0"
+version = "0.1.0"
 description = "A lightweight system tray development server"
 authors = ["Codeium"]
 license = "MIT"
