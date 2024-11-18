@@ -105,12 +105,11 @@ jobs:
           cargo test
           grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to GitHub
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./src-tauri/lcov.info
-          fail_ci_if_error: true
+          name: code-coverage-report
+          path: ./src-tauri/lcov.info
 
       - name: Upload HTML coverage report
         if: always() && steps.coverage.outcome == 'success'
