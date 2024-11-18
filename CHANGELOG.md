@@ -1,3 +1,12 @@
+## [1.1.2](https://github.com/daniissac/servelite/compare/v1.1.1...v1.1.2) (2024-11-18)
+
+
+### Bug Fixes
+
+* add version field to Cargo.toml ([c29b742](https://github.com/daniissac/servelite/commit/c29b742afafa1818fb210c7bd954bb5e7317fc41))
+
+
+
 ## [1.1.1](https://github.com/daniissac/servelite/compare/v1.1.0...v1.1.1) (2024-11-18)
 
 
@@ -31,16 +40,6 @@
 ### Bug Fixes
 
 * improve GitHub Actions workflows and fix Tauri configuration ([4b171c6](https://github.com/daniissac/servelite/commit/4b171c6fe1548c9c7c0bceb80db39546f270d9cb))
-
-
-
-## [1.0.3](https://github.com/daniissac/servelite/compare/v1.0.2...v1.0.3) (2024-11-17)
-
-
-### Bug Fixes
-
-* simplify checkout configuration ([2a1a9f5](https://github.com/daniissac/servelite/commit/2a1a9f5b10e691618de7bce76bcf0d81a3b49ca3))
-* use PAT_TOKEN for workflow authentication ([7157847](https://github.com/daniissac/servelite/commit/7157847d5b311205838f4a1e80794086b485db26))
 
 
 
