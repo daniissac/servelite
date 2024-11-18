@@ -100,7 +100,9 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
     setup_live_reload(&mut state, path.clone()).await?;
 
     // Create reload channel for this server instance
-    let reload_tx = state.reload_tx.as_ref().unwrap().clone();
+    let reload_tx = state.reload_tx.as_ref()
+        .ok_or_else(|| "Reload channel not initialized".to_string())?
+        .clone();
 
     // Create file serving route with CORS and live reload
     let files = warp::fs::dir(path);
@@ -124,7 +126,8 @@ async fn start_server_internal(state: Arc<Mutex<ServerState>>, path: PathBuf) ->
     state.current_port = port;
 
     // Create server
-    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
+    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()
+        .map_err(|e| format!("Failed to parse address: {}", e))?;
     let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
         tokio::signal::ctrl_c().await.ok();
     });
@@ -140,21 +143,27 @@ async fn handle_ws_client(ws: WebSocket, reload_tx: tokio::sync::broadcast::Send
     let (mut tx, mut rx) = ws.split();
     let mut reload_rx = reload_tx.subscribe();
 
-    let mut send_task = tokio::spawn(async move {
+    let send_task = tokio::spawn(async move {
         while let Ok(()) = reload_rx.recv().await {
-            if tx.send(Message::text("reload")).await.is_err() {
+            if let Err(e) = tx.send(Message::text("reload")).await {
+                tracing::error!("Failed to send reload message: {}", e);
                 break;
             }
         }
     });
 
-    let mut recv_task = tokio::spawn(async move {
-        while let Some(Ok(_)) = rx.next().await {}
+    let recv_task = tokio::spawn(async move {
+        while let Some(result) = rx.next().await {
+            if let Err(e) = result {
+                tracing::error!("WebSocket receive error: {}", e);
+                break;
+            }
+        }
     });
 
     tokio::select! {
-        _ = &mut send_task => recv_task.abort(),
-        _ = &mut recv_task => send_task.abort(),
+        _ = send_task => recv_task.abort(),
+        _ = recv_task => send_task.abort(),
     }
 }
 
