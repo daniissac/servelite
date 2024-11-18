@@ -35,7 +35,7 @@
     },
     "bundle": {
       "active": true,
-      "targets": ["deb", "appimage", "dmg", "msi", "updater"],
+      "targets": ["deb", "appimage", "dmg", "msi"],
       "identifier": "com.codeium.servelite",
       "publisher": "Codeium",
       "copyright": " 2024 Codeium",
@@ -71,12 +71,7 @@
       "iconAsTemplate": true
     },
     "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/Codeium/servelite/releases/latest/download/latest.json"
-      ],
-      "dialog": true,
-      "pubkey": "YOUR_UPDATER_SIGNATURE_PUBKEY_HERE"
+      "active": false
     },
     "windows": []
   }
