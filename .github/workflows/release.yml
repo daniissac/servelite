@@ -51,27 +51,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Debug Info (Windows only)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          Write-Host "Environment Variables:"
-          Get-ChildItem env:
-          Write-Host "Current Directory Structure:"
-          Get-ChildItem -Recurse
-          Write-Host "Tauri Config:"
-          Get-Content src-tauri/tauri.conf.json
-          Write-Host "Cargo.toml:"
-          Get-Content src-tauri/Cargo.toml
-
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           DEBUG: true
         with:
           tagName: ${{ github.ref_name }}
@@ -110,10 +95,27 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
-  verify:
+      - name: Debug Info (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          Write-Host "Environment Variables:"
+          Get-ChildItem env:
+          Write-Host "Current Directory Structure:"
+          Get-ChildItem -Recurse
+          Write-Host "Tauri Config:"
+          Get-Content src-tauri/tauri.conf.json
+          Write-Host "Cargo.toml:"
+          Get-Content src-tauri/Cargo.toml
+
+  create-release:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
       - name: Download all artifacts
         uses: actions/download-artifact@v3
         with:
@@ -121,3 +123,21 @@ jobs:
 
       - name: Display structure of downloaded files
         run: ls -R artifacts/
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # Create release
+          gh release create ${{ github.ref_name }} \
+            --title "servelite ${{ github.ref_name }}" \
+            --notes "Release ${{ github.ref_name }}" \
+            --draft
+
+          # Upload all artifacts
+          for file in $(find artifacts -type f); do
+            gh release upload ${{ github.ref_name }} "$file" --clobber
+          done
+
+          # Publish release
+          gh release edit ${{ github.ref_name }} --draft=false
